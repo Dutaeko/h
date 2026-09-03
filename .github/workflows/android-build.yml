@@ -1,0 +1,66 @@
+name: Android Build
+
+"on":
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build ${{ matrix.configuration }} APK
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - configuration: Debug
+            gradle_task: :app:assembleDebug
+            artifact_name: app-debug-apk
+            artifact_path: app/build/outputs/apk/debug/*.apk
+          - configuration: Release
+            gradle_task: :app:assembleRelease
+            artifact_name: app-release-unsigned-apk
+            artifact_path: app/build/outputs/apk/release/*unsigned*.apk
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK packages
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager --install \
+            "platform-tools" \
+            "platforms;android-35" \
+            "build-tools;35.0.0"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+
+      - name: Build ${{ matrix.configuration }} APK
+        run: gradle ${{ matrix.gradle_task }} --no-daemon --stacktrace
+
+      - name: Upload ${{ matrix.configuration }} APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: ${{ matrix.artifact_path }}
+          if-no-files-found: error
